@@ -27,15 +27,21 @@ python src/extract.py data/startups.csv
 ~~~
 
 ## Example Output
+
+~~~
+📊 VC DUE DILIGENCE REPORT
+==================================================
 Startups analyzed: 5
 Total Cash: €23,300,000
 🔥 Avg Burn Rate: €132,000/month
-⏳ Avg Runway: 24.5 months
+⏳ Avg Runway: 31.3 months
 
 🚀 TOP GROWTH STARTUPS:
-- GreenHydrogen: 30.0% MoM
-- BatteryX: 22.0% MoM
-- SolarTech: 15.0% MoM
+• GreenHydrogen: 30.0% MoM
+• BatteryX: 22.0% MoM
+• SolarTech: 15.0% MoM
+==================================================
+~~~
 
 ## Project Structure
 
