@@ -10,8 +10,6 @@ Automated financial KPI extraction for venture capital due diligence.
 - Built for VCs, angels, and startup analysts
 
 ## 📊 Example Output
-📊 VC DUE DILIGENCE REPORT
-==================================================
 Startups analyzed: 5
 Total Cash: €23,300,000
 🔥 Avg Burn Rate: €132,000/month
@@ -39,6 +37,7 @@ python src/extract.py data/startups.csv
 
 ## 📁 Project Structure
 
+~~~
 vc-diligence-ai/
 ├── src/              # Source code
 │   └── extract.py    # Main analysis module
@@ -46,6 +45,7 @@ vc-diligence-ai/
 ├── tests/            # Unit tests (coming soon)
 ├── requirements.txt  # Python dependencies
 └── README.md         # This file
+~~~
 
 ## 🎯 Roadmap
 
