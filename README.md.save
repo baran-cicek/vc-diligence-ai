@@ -20,12 +20,6 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ~~~
 
-## Quick Start
-
-~~~bash
-python src/extract.py data/startups.csv
-~~~
-
 ## Example Output
 Startups analyzed: 5
 Total Cash: €23,300,000
@@ -36,6 +30,13 @@ Total Cash: €23,300,000
 - GreenHydrogen: 30.0% MoM
 - BatteryX: 22.0% MoM
 - SolarTech: 15.0% MoM
+
+
+## Quick Start
+
+~~~bash
+python src/extract.py data/startups.csv
+~~~
 
 ## Project Structure
 
