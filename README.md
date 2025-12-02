@@ -2,14 +2,25 @@
 
 Automated financial KPI extraction for venture capital due diligence.
 
-## 🚀 What it does
+## What it does
 
 - Analyzes CSV files with startup financial data
 - Calculates key metrics: Burn Rate, Runway, Growth Rankings
 - Outputs clean, formatted reports
 - Built for VCs, angels, and startup analysts
 
-## 📊 Example Output
+## Installation
+
+From GitHub (recommended):
+~~~bash
+git clone https://github.com/baran-cicek/vc-diligence-ai.git
+cd vc-diligence-ai
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+~~~
+
+## Example Output
 Startups analyzed: 5
 Total Cash: €23,300,000
 🔥 Avg Burn Rate: €132,000/month
@@ -21,7 +32,7 @@ Total Cash: €23,300,000
 - SolarTech: 15.0% MoM
 
 
-## 🛠️ Quick Start
+## Quick Start
 
 ~~~bash
 # 1. Clone & setup
@@ -35,7 +46,7 @@ pip install -r requirements.txt
 python src/extract.py data/startups.csv
 ~~~
 
-## 📁 Project Structure
+## Project Structure
 
 ~~~
 vc-diligence-ai/
@@ -47,7 +58,7 @@ vc-diligence-ai/
 └── README.md         # This file
 ~~~
 
-## 🎯 Roadmap
+## Roadmap
 
 - CSV analysis & reporting
 - PDF document parsing
