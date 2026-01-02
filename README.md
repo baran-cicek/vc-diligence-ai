@@ -33,28 +33,36 @@ python src/extract.py data/startups.csv
 python src/extract.py data/startups.pdf
 
 # AI-powered PDF extraction (auto-detects available API key)
-python src/extract.py data/report.pdf --ai
+python src/extract.py data/messy_pitch_deck.pdf --ai
 
 # AI extraction with specific provider
-python src/extract.py data/report.pdf --ai --provider openai
+python src/extract.py data/messy_pitch_deck.pdf --ai --provider openai
+~~~
+
+## Example Output
+
+~~~
+📁 Analyzing: data/messy_pitch_deck.pdf
+🤖 AI extraction (groq): Found 1 startup(s)
+==================================================
+📊 VC DUE DILIGENCE REPORT
+==================================================
+Startups analyzed: 1
+Total Cash: €4,200,000
+🔥 Avg Burn Rate: €180,000/month
+⏳ Avg Runway: 23.3 months
+🚀 TOP GROWTH STARTUPS:
+   • QuantumBio: 35.0% MoM
+==================================================
 ~~~
 
 ## AI-Powered Extraction
 
 The `--ai` flag enables AI-powered data extraction for PDF files, useful when standard parsing fails on complex or unstructured documents.
 
-### Provider Comparison
+Supported providers: Anthropic (Claude) • OpenAI (GPT) • Google (Gemini) • Groq • Mistral • DeepSeek
 
-| Provider   | Model                | Cost/1M tokens | Speed  | Quality | Free Tier          |
-|------------|----------------------|----------------|--------|---------|-------------------|
-| **Groq**   | Llama3-70B           | Free           | Fast   | Good    | Yes (generous)    |
-| **Google** | Gemini 1.5 Flash     | $0.075         | Fast   | Good    | Yes ($0 credit)   |
-| **DeepSeek** | DeepSeek V2        | $0.14          | Medium | Good    | Yes ($5 credit)   |
-| **Mistral** | Mistral Small       | $0.20          | Fast   | Good    | Yes (limited)     |
-| **OpenAI** | GPT-4o-mini          | $0.15          | Fast   | Great   | No                |
-| **Anthropic** | Claude 3.5 Haiku  | $0.25          | Fast   | Great   | No                |
-
-*Recommendation: Start with Groq (free) or Google (free tier), upgrade to OpenAI/Anthropic for best quality.*
+*Recommendation: Start with Groq (free, no credit card required)*
 
 ### API Key Setup
 
@@ -111,35 +119,15 @@ echo $GROQ_API_KEY
 
 ~~~bash
 # Auto-detect provider (uses first available API key)
-python src/extract.py data/report.pdf --ai
+python src/extract.py data/messy_pitch_deck.pdf --ai
 
 # Specific provider
-python src/extract.py data/report.pdf --ai --provider groq
-python src/extract.py data/report.pdf --ai --provider google
-python src/extract.py data/report.pdf --ai --provider openai
+python src/extract.py data/messy_pitch_deck.pdf --ai --provider groq
+python src/extract.py data/messy_pitch_deck.pdf --ai --provider google
+python src/extract.py data/messy_pitch_deck.pdf --ai --provider openai
 
 # Show help
 python src/extract.py --help
-~~~
-
-## Example Output
-
-~~~
-📁 Analyzing: data/report.pdf
-🤖 AI extraction (groq): Found 5 startup(s)
-
-📊 VC DUE DILIGENCE REPORT
-==================================================
-Startups analyzed: 5
-Total Cash: €23,300,000
-🔥 Avg Burn Rate: €132,000/month
-⏳ Avg Runway: 31.3 months
-
-🚀 TOP GROWTH STARTUPS:
-• GreenHydrogen: 30.0% MoM
-• BatteryX: 22.0% MoM
-• SolarTech: 15.0% MoM
-==================================================
 ~~~
 
 ## Troubleshooting
