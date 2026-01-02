@@ -1,12 +1,49 @@
 #!/usr/bin/env python3
 """
-VC Due Diligence MVP - CSV & PDF Analyzer
+VC Due Diligence MVP - CSV & PDF Analyzer with AI-powered extraction
 """
 import pandas as pd
 import pdfplumber
 import re
 import sys
 import os
+import argparse
+import json
+
+# Provider configuration: provider_name -> (model_id, env_var)
+PROVIDERS = {
+    'anthropic': ('claude-3-5-haiku-20241022', 'ANTHROPIC_API_KEY'),
+    'openai': ('gpt-4o-mini', 'OPENAI_API_KEY'),
+    'google': ('gemini/gemini-1.5-flash', 'GOOGLE_API_KEY'),
+    'groq': ('groq/llama-3.3-70b-versatile', 'GROQ_API_KEY'),
+    'mistral': ('mistral/mistral-small-latest', 'MISTRAL_API_KEY'),
+    'deepseek': ('deepseek/deepseek-chat', 'DEEPSEEK_API_KEY'),
+}
+
+
+def detect_provider() -> str | None:
+    """Auto-detect available provider by checking environment variables."""
+    for provider, (_, env_var) in PROVIDERS.items():
+        if os.environ.get(env_var):
+            return provider
+    return None
+
+
+def get_provider_error_message() -> str:
+    """Generate error message with setup instructions for all providers."""
+    msg = "❌ No API key found. Set one of the following environment variables:\n\n"
+    instructions = [
+        ("ANTHROPIC_API_KEY", "Anthropic", "https://console.anthropic.com/"),
+        ("OPENAI_API_KEY", "OpenAI", "https://platform.openai.com/api-keys"),
+        ("GOOGLE_API_KEY", "Google AI", "https://aistudio.google.com/apikey"),
+        ("GROQ_API_KEY", "Groq", "https://console.groq.com/keys"),
+        ("MISTRAL_API_KEY", "Mistral", "https://console.mistral.ai/api-keys/"),
+        ("DEEPSEEK_API_KEY", "DeepSeek", "https://platform.deepseek.com/api_keys"),
+    ]
+    for env_var, name, url in instructions:
+        msg += f"  {env_var:<20} - {name:<12} ({url})\n"
+    msg += "\nExample:\n  export ANTHROPIC_API_KEY='your-key-here'\n"
+    return msg
 
 def parse_pdf(filepath: str) -> pd.DataFrame:
     """
@@ -95,7 +132,101 @@ def _parse_number(value):
         return None
 
 
-def load_data(filepath: str) -> pd.DataFrame:
+def parse_pdf_with_ai(filepath: str, provider: str) -> pd.DataFrame:
+    """
+    Extracts startup data from a PDF using AI-powered analysis.
+    Uses litellm for unified API access across multiple providers.
+    Returns DataFrame with columns: name, cash, monthly_burn, revenue_growth
+    """
+    try:
+        from litellm import completion
+    except ImportError:
+        print("❌ litellm not installed. Run: pip install litellm")
+        sys.exit(1)
+
+    model_id, env_var = PROVIDERS[provider]
+
+    if not os.environ.get(env_var):
+        print(f"❌ {env_var} not set for provider '{provider}'")
+        sys.exit(1)
+
+    # Extract text from PDF
+    text_content = ""
+    try:
+        with pdfplumber.open(filepath) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_content += page_text + "\n"
+    except Exception as e:
+        print(f"❌ PDF reading error: {e}")
+        sys.exit(1)
+
+    if not text_content.strip():
+        print("❌ No text content found in PDF")
+        sys.exit(1)
+
+    prompt = f"""Extract startup financial data from this document. Return ONLY valid JSON array.
+
+Each startup needs these exact fields:
+- name: company name (string)
+- cash: total cash/funding in numeric form (number, no currency symbols)
+- monthly_burn: monthly burn rate in numeric form (number, no currency symbols)
+- revenue_growth: monthly revenue growth as decimal (e.g., 0.15 for 15%)
+
+Document content:
+{text_content}
+
+Return format (JSON array only, no markdown):
+[{{"name": "...", "cash": ..., "monthly_burn": ..., "revenue_growth": ...}}]"""
+
+    try:
+        response = completion(
+            model=model_id,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+        )
+        result = response.choices[0].message.content.strip()
+
+        # Clean response (remove markdown code blocks if present)
+        if result.startswith("```"):
+            result = re.sub(r'^```(?:json)?\n?', '', result)
+            result = re.sub(r'\n?```$', '', result)
+
+        data = json.loads(result)
+        if not isinstance(data, list):
+            data = [data]
+
+    except json.JSONDecodeError as e:
+        print(f"❌ AI returned invalid JSON: {e}")
+        print(f"   Response: {result[:200]}...")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ AI extraction error: {e}")
+        sys.exit(1)
+
+    if not data:
+        print("❌ AI found no startup data in document")
+        sys.exit(1)
+
+    df = pd.DataFrame(data)
+
+    # Validate required fields
+    required = ['name', 'cash', 'monthly_burn', 'revenue_growth']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        print(f"❌ AI extraction missing fields: {', '.join(missing)}")
+        sys.exit(1)
+
+    # Ensure numeric types
+    for col in ['cash', 'monthly_burn', 'revenue_growth']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    print(f"🤖 AI extraction ({provider}): Found {len(df)} startup(s)")
+    return df
+
+
+def load_data(filepath: str, use_ai: bool = False, provider: str | None = None) -> pd.DataFrame:
     """Loads data from CSV or PDF based on file extension."""
     ext = os.path.splitext(filepath)[1].lower()
 
@@ -106,6 +237,8 @@ def load_data(filepath: str) -> pd.DataFrame:
             print(f"❌ File not found: {filepath}")
             sys.exit(1)
     elif ext == '.pdf':
+        if use_ai:
+            return parse_pdf_with_ai(filepath, provider)
         return parse_pdf(filepath)
     else:
         print(f"❌ Unsupported file type: {ext}. Use .csv or .pdf")
@@ -151,14 +284,59 @@ def print_report(results: dict):
     
     print("="*50 + "\n")
 
-if __name__ == "__main__":
-    # Simple CLI
-    if len(sys.argv) > 1:
-        input_file = sys.argv[1]
-    else:
-        input_file = "data/startups.csv"
+def main():
+    parser = argparse.ArgumentParser(
+        description="VC Due Diligence - Financial KPI Extraction",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python extract.py data/startups.csv           # Standard CSV analysis
+  python extract.py data/report.pdf             # Standard PDF parsing
+  python extract.py data/report.pdf --ai        # AI extraction (auto-detect provider)
+  python extract.py data/report.pdf --ai --provider openai
+        """
+    )
+    parser.add_argument(
+        "file",
+        nargs="?",
+        default="data/startups.csv",
+        help="Input file (CSV or PDF). Default: data/startups.csv"
+    )
+    parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="Use AI-powered extraction for PDF files"
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["anthropic", "openai", "google", "groq", "mistral", "deepseek", "auto"],
+        default="auto",
+        help="AI provider (default: auto-detect from available API keys)"
+    )
 
-    print(f"📁 Analyzing: {input_file}")
-    df = load_data(input_file)
+    args = parser.parse_args()
+
+    # Handle AI mode
+    provider = None
+    if args.ai:
+        if args.provider == "auto":
+            provider = detect_provider()
+            if not provider:
+                print(get_provider_error_message())
+                sys.exit(1)
+        else:
+            provider = args.provider
+            _, env_var = PROVIDERS[provider]
+            if not os.environ.get(env_var):
+                print(f"❌ {env_var} not set for provider '{provider}'")
+                print(get_provider_error_message())
+                sys.exit(1)
+
+    print(f"📁 Analyzing: {args.file}")
+    df = load_data(args.file, use_ai=args.ai, provider=provider)
     results = analyze_data(df)
     print_report(results)
+
+
+if __name__ == "__main__":
+    main()

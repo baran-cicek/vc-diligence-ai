@@ -1,2 +1,3 @@
 pandas==2.3.3
 pdfplumber==0.11.4
+litellm>=1.40.0
