@@ -4,7 +4,7 @@ Automated financial KPI extraction for venture capital due diligence.
 
 ## What it does
 
-- Analyzes CSV files with startup financial data
+- Analyzes CSV or PDF files with startup financial data
 - Calculates key metrics: Burn Rate, Runway, Growth Rankings
 - Outputs clean, formatted reports
 - Built for VCs, angels, and startup analysts
@@ -23,7 +23,11 @@ pip install -r requirements.txt
 ## Quick Start
 
 ~~~bash
+# Analyze CSV file
 python src/extract.py data/startups.csv
+
+# Analyze PDF file (text-based PDFs with tables or key-value format)
+python src/extract.py data/startups.pdf
 ~~~
 
 ## Example Output
@@ -57,8 +61,8 @@ vc-diligence-ai/
 
 ## Roadmap
 
-- CSV analysis & reporting
-- PDF document parsing
-- AI-powered data extraction
-- Web dashboard interface
-- API for integration with VC tools
+- [x] CSV analysis & reporting
+- [x] PDF document parsing
+- [ ] AI-powered data extraction
+- [ ] Web dashboard interface
+- [ ] API for integration with VC tools
