@@ -40,7 +40,8 @@ def parse_pdf(filepath: str) -> pd.DataFrame:
                             record = {}
                             for j, cell in enumerate(row):
                                 if j < len(header):
-                                    col = header[j].replace(' ', '_').replace('-', '_')
+                                    # Normalize: remove (€) or any parentheses, lowercase, replace spaces/hyphens with underscores
+                                    col = re.sub(r'\s*\([^)]*\)', '', header[j]).strip().lower().replace(' ', '_').replace('-', '_')
                                     record[col] = cell
                             if record.get('name'):
                                 records.append(record)
@@ -102,7 +103,7 @@ def load_data(filepath: str) -> pd.DataFrame:
         try:
             return pd.read_csv(filepath)
         except FileNotFoundError:
-            print(f"❌ Datei nicht gefunden: {filepath}")
+            print(f"❌ File not found: {filepath}")
             sys.exit(1)
     elif ext == '.pdf':
         return parse_pdf(filepath)
@@ -116,7 +117,7 @@ def analyze_data(df: pd.DataFrame) -> dict:
     Analyzes startup data DataFrame.
     Expected columns: name, cash, monthly_burn, revenue_growth
     """
-    # Basis-Berechnungen
+    # Base calculations
     results = {
         'startup_count': len(df),
         'avg_burn_rate': df['monthly_burn'].mean(),
@@ -125,7 +126,7 @@ def analyze_data(df: pd.DataFrame) -> dict:
         'top_growers': []
     }
 
-    # Top 3 Wachstum
+    # Top 3 growth
     if 'revenue_growth' in df.columns:
         top_3 = df.nlargest(3, 'revenue_growth')
         results['top_growers'] = top_3[['name', 'revenue_growth']].to_dict('records')
@@ -133,17 +134,17 @@ def analyze_data(df: pd.DataFrame) -> dict:
     return results
 
 def print_report(results: dict):
-    """Formatiert die Ergebnisse schön."""
+    """Formats and prints the analysis report."""
     print("\n" + "="*50)
     print("📊 VC DUE DILIGENCE REPORT")
     print("="*50)
-    print(f"Startups analysiert: {results['startup_count']}")
-    print(f"Gesamt Cash: €{results['total_cash']:,.0f}")
-    print(f"🔥 Durchschn. Burn Rate: €{results['avg_burn_rate']:,.0f}/Monat")
-    print(f"⏳ Durchschn. Runway: {results['avg_runway']:.1f} Monate")
+    print(f"Startups analyzed: {results['startup_count']}")
+    print(f"Total Cash: €{results['total_cash']:,.0f}")
+    print(f"🔥 Avg Burn Rate: €{results['avg_burn_rate']:,.0f}/month")
+    print(f"⏳ Avg Runway: {results['avg_runway']:.1f} months")
     
     if results['top_growers']:
-        print("\n🚀 TOP WACHSTUMS-STARTUPS:")
+        print("\n🚀 TOP GROWTH STARTUPS:")
         for startup in results['top_growers']:
             growth_pct = startup['revenue_growth'] * 100
             print(f"   • {startup['name']}: {growth_pct:.1f}% MoM")
@@ -151,13 +152,13 @@ def print_report(results: dict):
     print("="*50 + "\n")
 
 if __name__ == "__main__":
-    # Einfache CLI
+    # Simple CLI
     if len(sys.argv) > 1:
         input_file = sys.argv[1]
     else:
         input_file = "data/startups.csv"
 
-    print(f"📁 Analysiere: {input_file}")
+    print(f"📁 Analyzing: {input_file}")
     df = load_data(input_file)
     results = analyze_data(df)
     print_report(results)
