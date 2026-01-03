@@ -1,0 +1,442 @@
+#!/usr/bin/env python3
+"""
+VC Due Diligence MVP - CSV & PDF Analyzer with AI-powered extraction
+"""
+import pandas as pd
+import pdfplumber
+import re
+import sys
+import os
+import argparse
+import json
+
+# Provider configuration: provider_name -> (model_id, env_var)
+PROVIDERS = {
+    'anthropic': ('claude-3-5-haiku-20241022', 'ANTHROPIC_API_KEY'),
+    'openai': ('gpt-4o-mini', 'OPENAI_API_KEY'),
+    'google': ('gemini/gemini-1.5-flash', 'GOOGLE_API_KEY'),
+    'groq': ('groq/llama-3.3-70b-versatile', 'GROQ_API_KEY'),
+    'mistral': ('mistral/mistral-small-latest', 'MISTRAL_API_KEY'),
+    'deepseek': ('deepseek/deepseek-chat', 'DEEPSEEK_API_KEY'),
+}
+
+
+def detect_provider() -> str | None:
+    """Auto-detect available provider by checking environment variables."""
+    for provider, (_, env_var) in PROVIDERS.items():
+        if os.environ.get(env_var):
+            return provider
+    return None
+
+
+def get_provider_error_message() -> str:
+    """Generate error message with setup instructions for all providers."""
+    msg = "No API key found. Set one of the following environment variables:\n\n"
+    instructions = [
+        ("ANTHROPIC_API_KEY", "Anthropic", "https://console.anthropic.com/"),
+        ("OPENAI_API_KEY", "OpenAI", "https://platform.openai.com/api-keys"),
+        ("GOOGLE_API_KEY", "Google AI", "https://aistudio.google.com/apikey"),
+        ("GROQ_API_KEY", "Groq", "https://console.groq.com/keys"),
+        ("MISTRAL_API_KEY", "Mistral", "https://console.mistral.ai/api-keys/"),
+        ("DEEPSEEK_API_KEY", "DeepSeek", "https://platform.deepseek.com/api_keys"),
+    ]
+    for env_var, name, url in instructions:
+        msg += f"  {env_var:<20} - {name:<12} ({url})\n"
+    msg += "\nExample:\n  export ANTHROPIC_API_KEY='your-key-here'\n"
+    return msg
+
+def parse_pdf(filepath: str) -> pd.DataFrame:
+    """
+    Extracts startup data from a text-based PDF.
+    Supports table format or key-value pairs.
+    Returns DataFrame with columns: name, cash, monthly_burn, revenue_growth
+    """
+    records = []
+
+    try:
+        with pdfplumber.open(filepath) as pdf:
+            for page in pdf.pages:
+                # Try table extraction first (most reliable for structured data)
+                tables = page.extract_tables()
+                for table in tables:
+                    if not table:
+                        continue
+                    # Find header row
+                    header = None
+                    for i, row in enumerate(table):
+                        row_lower = [str(cell).lower() if cell else '' for cell in row]
+                        if 'name' in row_lower and any(x in ''.join(row_lower) for x in ['cash', 'burn', 'growth']):
+                            header = row_lower
+                            data_rows = table[i+1:]
+                            break
+
+                    if header:
+                        for row in data_rows:
+                            if not row or not any(row):
+                                continue
+                            record = {}
+                            for j, cell in enumerate(row):
+                                if j < len(header):
+                                    # Normalize: remove (€) or any parentheses, lowercase, replace spaces/hyphens with underscores
+                                    col = re.sub(r'\s*\([^)]*\)', '', header[j]).strip().lower().replace(' ', '_').replace('-', '_')
+                                    record[col] = cell
+                            if record.get('name'):
+                                records.append(record)
+
+                # Fallback: parse text for key-value patterns if no tables found
+                if not records:
+                    text = page.extract_text() or ''
+                    # Look for patterns like "Name: StartupX, Cash: 1000000"
+                    startup_blocks = re.split(r'\n(?=name\s*[:\-])', text, flags=re.IGNORECASE)
+                    for block in startup_blocks:
+                        record = {}
+                        for field in ['name', 'cash', 'monthly_burn', 'revenue_growth']:
+                            pattern = rf'{field}\s*[:\-]\s*([^\n,;]+)'
+                            match = re.search(pattern, block, re.IGNORECASE)
+                            if match:
+                                record[field] = match.group(1).strip()
+                        if record.get('name'):
+                            records.append(record)
+    except Exception as e:
+        print(f"PDF parsing error: {e}")
+        sys.exit(1)
+
+    if not records:
+        print("No startup data found in PDF. Expected table or key-value format.")
+        sys.exit(1)
+
+    df = pd.DataFrame(records)
+
+    # Convert numeric columns
+    for col in ['cash', 'monthly_burn', 'revenue_growth']:
+        if col in df.columns:
+            df[col] = df[col].apply(lambda x: _parse_number(x) if pd.notna(x) else None)
+
+    required = ['name', 'cash', 'monthly_burn', 'revenue_growth']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        print(f"Missing required fields in PDF: {', '.join(missing)}")
+        sys.exit(1)
+
+    return df
+
+
+def _parse_number(value):
+    """Converts string to number, handling currency symbols and formats."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).replace(',', '').replace('€', '').replace('$', '').replace('%', '').strip()
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def parse_pdf_with_ai(filepath: str, provider: str) -> pd.DataFrame:
+    """
+    Extracts startup data from a PDF using AI-powered analysis.
+    Uses litellm for unified API access across multiple providers.
+    Returns DataFrame with columns: name, cash, monthly_burn, revenue_growth
+    """
+    try:
+        from litellm import completion
+    except ImportError:
+        print("litellm not installed. Run: pip install litellm")
+        sys.exit(1)
+
+    model_id, env_var = PROVIDERS[provider]
+
+    if not os.environ.get(env_var):
+        print(f"{env_var} not set for provider '{provider}'")
+        sys.exit(1)
+
+    # Extract text from PDF
+    text_content = ""
+    try:
+        with pdfplumber.open(filepath) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_content += page_text + "\n"
+    except Exception as e:
+        print(f"PDF reading error: {e}")
+        sys.exit(1)
+
+    if not text_content.strip():
+        print("No text content found in PDF")
+        sys.exit(1)
+
+    prompt = f"""Extract startup financial data from this document. Return ONLY valid JSON array.
+
+Each startup needs these exact fields:
+- name: company name (string)
+- cash: total cash/funding in numeric form (number, no currency symbols)
+- monthly_burn: monthly burn rate in numeric form (number, no currency symbols)
+- revenue_growth: monthly revenue growth as decimal (e.g., 0.15 for 15%)
+
+Document content:
+{text_content}
+
+Return format (JSON array only, no markdown):
+[{{"name": "...", "cash": ..., "monthly_burn": ..., "revenue_growth": ...}}]"""
+
+    try:
+        response = completion(
+            model=model_id,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+        )
+        result = response.choices[0].message.content.strip()
+
+        # Clean response (remove markdown code blocks if present)
+        if result.startswith("```"):
+            result = re.sub(r'^```(?:json)?\n?', '', result)
+            result = re.sub(r'\n?```$', '', result)
+
+        data = json.loads(result)
+        if not isinstance(data, list):
+            data = [data]
+
+    except json.JSONDecodeError as e:
+        print(f"AI returned invalid JSON: {e}")
+        print(f"   Response: {result[:200]}...")
+        sys.exit(1)
+    except Exception as e:
+        print(f"AI extraction error: {e}")
+        sys.exit(1)
+
+    if not data:
+        print("AI found no startup data in document")
+        sys.exit(1)
+
+    df = pd.DataFrame(data)
+
+    # Validate required fields
+    required = ['name', 'cash', 'monthly_burn', 'revenue_growth']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        print(f"AI extraction missing fields: {', '.join(missing)}")
+        sys.exit(1)
+
+    # Ensure numeric types
+    for col in ['cash', 'monthly_burn', 'revenue_growth']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    print(f"🤖 AI extraction ({provider}): Found {len(df)} startup(s)")
+    return df
+
+
+def load_data(filepath: str, use_ai: bool = False, provider: str | None = None) -> pd.DataFrame:
+    """Loads data from CSV or PDF based on file extension."""
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == '.csv':
+        try:
+            return pd.read_csv(filepath)
+        except FileNotFoundError:
+            print(f"File not found: {filepath}")
+            sys.exit(1)
+    elif ext == '.pdf':
+        if use_ai:
+            return parse_pdf_with_ai(filepath, provider)
+        return parse_pdf(filepath)
+    else:
+        print(f"Unsupported file type: {ext}. Use .csv or .pdf")
+        sys.exit(1)
+
+
+def analyze_data(df: pd.DataFrame) -> dict:
+    """
+    Analyzes startup data DataFrame.
+    Expected columns: name, cash, monthly_burn, revenue_growth
+    """
+    # Filter for valid burn rates when calculating runway
+    valid_burn = df[df['monthly_burn'] > 0]
+    valid_count = len(valid_burn)
+
+    # Base calculations
+    results = {
+        'startup_count': len(df),
+        'avg_burn_rate': df['monthly_burn'].mean(),
+        'avg_runway': (valid_burn['cash'] / valid_burn['monthly_burn']).mean() if valid_count > 0 else None,
+        'runway_based_on': valid_count if valid_count < len(df) else None,
+        'total_cash': df['cash'].sum(),
+        'top_growers': []
+    }
+
+    # Top 3 growth
+    if 'revenue_growth' in df.columns:
+        top_3 = df.nlargest(3, 'revenue_growth')
+        results['top_growers'] = top_3[['name', 'revenue_growth']].to_dict('records')
+
+    return results
+
+
+def check_data_quality(df: pd.DataFrame) -> list:
+    """
+    Checks for suspicious data points and returns warnings.
+    Returns list of (company_name, warning_message) tuples.
+    """
+    warnings = []
+
+    for _, row in df.iterrows():
+        name = row['name']
+        cash = row['cash']
+        burn = row['monthly_burn']
+        growth = row['revenue_growth']
+
+        # Critical: Less than 1 month runway (check first as highest priority)
+        if burn > 0 and cash / burn < 1:
+            warnings.append((name, "CRITICAL: Less than 1 month runway"))
+        # Zero or negative burn rate
+        elif burn <= 0:
+            warnings.append((name, "Zero or negative burn rate - incomplete data?"))
+        # Unusually long runway (>120 months = 10 years)
+        elif burn > 0 and cash / burn > 120:
+            warnings.append((name, "Unusually long runway - verify burn rate"))
+
+        # Significant negative growth (worse than -50%)
+        if pd.notna(growth) and growth < -0.5:
+            warnings.append((name, "Significant negative growth - verify data"))
+
+    return warnings[:4]  # Max 4 warnings
+
+
+def generate_report(df: pd.DataFrame) -> str:
+    """
+    Generates a formatted report string from startup data.
+
+    Args:
+        df: DataFrame with columns: name, cash, monthly_burn, revenue_growth
+
+    Returns:
+        Formatted report string
+    """
+    results = analyze_data(df)
+    warnings = check_data_quality(df)
+
+    lines = []
+    lines.append("=" * 50)
+    lines.append("📊 VC DUE DILIGENCE REPORT")
+    lines.append("=" * 50)
+    lines.append(f"Startups analyzed: {results['startup_count']}")
+    lines.append(f"Total Cash: €{results['total_cash']:,.0f}")
+    lines.append(f"🔥 Avg Burn Rate: €{results['avg_burn_rate']:,.0f}/month")
+
+    if results['avg_runway'] is not None:
+        runway_str = f"⏳ Avg Runway: {results['avg_runway']:.1f} months"
+        if results.get('runway_based_on') is not None:
+            runway_str += f" (based on {results['runway_based_on']} startups)"
+        lines.append(runway_str)
+    else:
+        lines.append("⏳ Avg Runway: N/A (no valid burn rates)")
+
+    if results['top_growers']:
+        lines.append("🚀 TOP GROWTH STARTUPS:")
+        for startup in results['top_growers']:
+            growth_pct = startup['revenue_growth'] * 100
+            lines.append(f"   • {startup['name']}: {growth_pct:.1f}% MoM")
+
+    lines.append("=" * 50)
+
+    if warnings:
+        lines.append("")
+        lines.append("🚩 DATA QUALITY WARNINGS:")
+        for name, message in warnings:
+            lines.append(f"   • {name}: {message}")
+
+    return "\n".join(lines)
+
+
+def print_warnings(warnings: list):
+    """Prints data quality warnings if any exist."""
+    if not warnings:
+        return
+
+    print("🚩 DATA QUALITY WARNINGS:")
+    for name, message in warnings:
+        print(f"   • {name}: {message}")
+    print()
+
+def print_report(results: dict):
+    """Formats and prints the analysis report."""
+    print("\n" + "="*50)
+    print("📊 VC DUE DILIGENCE REPORT")
+    print("="*50)
+    print(f"Startups analyzed: {results['startup_count']}")
+    print(f"Total Cash: €{results['total_cash']:,.0f}")
+    print(f"🔥 Avg Burn Rate: €{results['avg_burn_rate']:,.0f}/month")
+    if results['avg_runway'] is not None:
+        runway_str = f"⏳ Avg Runway: {results['avg_runway']:.1f} months"
+        if results.get('runway_based_on') is not None:
+            runway_str += f" (based on {results['runway_based_on']} startups)"
+        print(runway_str)
+    else:
+        print("⏳ Avg Runway: N/A (no valid burn rates)")
+
+    if results['top_growers']:
+        print("🚀 TOP GROWTH STARTUPS:")
+        for startup in results['top_growers']:
+            growth_pct = startup['revenue_growth'] * 100
+            print(f"   • {startup['name']}: {growth_pct:.1f}% MoM")
+
+    print("="*50 + "\n")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="VC Due Diligence - Financial KPI Extraction",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python extract.py data/startups.csv           # Standard CSV analysis
+  python extract.py data/report.pdf             # Standard PDF parsing
+  python extract.py data/report.pdf --ai        # AI extraction (auto-detect provider)
+  python extract.py data/report.pdf --ai --provider openai
+        """
+    )
+    parser.add_argument(
+        "file",
+        nargs="?",
+        default="data/startups.csv",
+        help="Input file (CSV or PDF). Default: data/startups.csv"
+    )
+    parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="Use AI-powered extraction for PDF files"
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["anthropic", "openai", "google", "groq", "mistral", "deepseek", "auto"],
+        default="auto",
+        help="AI provider (default: auto-detect from available API keys)"
+    )
+
+    args = parser.parse_args()
+
+    # Handle AI mode
+    provider = None
+    if args.ai:
+        if args.provider == "auto":
+            provider = detect_provider()
+            if not provider:
+                print(get_provider_error_message())
+                sys.exit(1)
+        else:
+            provider = args.provider
+            _, env_var = PROVIDERS[provider]
+            if not os.environ.get(env_var):
+                print(f"{env_var} not set for provider '{provider}'")
+                print(get_provider_error_message())
+                sys.exit(1)
+
+    print(f"📁 Analyzing: {args.file}")
+    df = load_data(args.file, use_ai=args.ai, provider=provider)
+    results = analyze_data(df)
+    print_report(results)
+    warnings = check_data_quality(df)
+    print_warnings(warnings)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,6 @@
 # VC Diligence AI
 ![](assets/vc-diligence-ai-ascii.png)
+
 Automated financial KPI extraction for venture capital due diligence.
 
 ## What it does
@@ -7,6 +8,7 @@ Automated financial KPI extraction for venture capital due diligence.
 - Analyzes CSV or PDF files with startup financial data
 - Calculates key metrics: Burn Rate, Runway, Growth Rankings
 - AI-powered data extraction with multi-provider support
+- Data quality validation and warnings
 - Outputs clean, formatted reports
 - Built for VCs, angels, and startup analysts
 
@@ -37,6 +39,22 @@ python src/extract.py data/messy_pitch_deck.pdf --ai
 
 # AI extraction with specific provider
 python src/extract.py data/messy_pitch_deck.pdf --ai --provider openai
+~~~
+
+## Python Package Usage
+
+Install locally:
+~~~bash
+pip install .
+~~~
+
+Use in your code:
+~~~python
+from vc_diligence.extract import load_data, generate_report
+
+df = load_data("pitch.pdf", use_ai=True, provider="groq")
+report = generate_report(df)
+print(report)
 ~~~
 
 ## Example Output
