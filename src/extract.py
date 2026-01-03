@@ -266,6 +266,47 @@ def analyze_data(df: pd.DataFrame) -> dict:
 
     return results
 
+
+def check_data_quality(df: pd.DataFrame) -> list:
+    """
+    Checks for suspicious data points and returns warnings.
+    Returns list of (company_name, warning_message) tuples.
+    """
+    warnings = []
+
+    for _, row in df.iterrows():
+        name = row['name']
+        cash = row['cash']
+        burn = row['monthly_burn']
+        growth = row['revenue_growth']
+
+        # Critical: Less than 1 month runway (check first as highest priority)
+        if burn > 0 and cash / burn < 1:
+            warnings.append((name, "CRITICAL: Less than 1 month runway"))
+        # Zero or negative burn rate
+        elif burn <= 0:
+            warnings.append((name, "Zero or negative burn rate - incomplete data?"))
+        # Unusually long runway (>120 months = 10 years)
+        elif burn > 0 and cash / burn > 120:
+            warnings.append((name, "Unusually long runway - verify burn rate"))
+
+        # Significant negative growth (worse than -50%)
+        if pd.notna(growth) and growth < -0.5:
+            warnings.append((name, "Significant negative growth - verify data"))
+
+    return warnings[:4]  # Max 4 warnings
+
+
+def print_warnings(warnings: list):
+    """Prints data quality warnings if any exist."""
+    if not warnings:
+        return
+
+    print("🚩 DATA QUALITY WARNINGS:")
+    for name, message in warnings:
+        print(f"   • {name}: {message}")
+    print()
+
 def print_report(results: dict):
     """Formats and prints the analysis report."""
     print("\n" + "="*50)
@@ -336,6 +377,8 @@ Examples:
     df = load_data(args.file, use_ai=args.ai, provider=provider)
     results = analyze_data(df)
     print_report(results)
+    warnings = check_data_quality(df)
+    print_warnings(warnings)
 
 
 if __name__ == "__main__":

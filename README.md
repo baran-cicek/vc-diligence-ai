@@ -1,5 +1,5 @@
 # VC Diligence AI
-
+![](assets/vc-diligence-ai-ascii.png)
 Automated financial KPI extraction for venture capital due diligence.
 
 ## What it does
