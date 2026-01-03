@@ -12,6 +12,23 @@ Automated financial KPI extraction for venture capital due diligence.
 - Outputs clean, formatted reports
 - Built for VCs, angels, and startup analysts
 
+## Example Output
+
+~~~
+📁 Analyzing: data/messy_pitch_deck.pdf
+🤖 AI extraction (groq): Found 1 startup(s)
+==================================================
+📊 VC DUE DILIGENCE REPORT
+==================================================
+Startups analyzed: 1
+Total Cash: €4,200,000
+🔥 Avg Burn Rate: €180,000/month
+⏳ Avg Runway: 23.3 months
+🚀 TOP GROWTH STARTUPS:
+   • QuantumBio: 35.0% MoM
+==================================================
+~~~
+
 ## Installation
 
 From GitHub (recommended):
@@ -39,39 +56,6 @@ python src/extract.py data/messy_pitch_deck.pdf --ai
 
 # AI extraction with specific provider
 python src/extract.py data/messy_pitch_deck.pdf --ai --provider openai
-~~~
-
-## Python Package Usage
-
-Install locally:
-~~~bash
-pip install .
-~~~
-
-Use in your code:
-~~~python
-from vc_diligence.extract import load_data, generate_report
-
-df = load_data("pitch.pdf", use_ai=True, provider="groq")
-report = generate_report(df)
-print(report)
-~~~
-
-## Example Output
-
-~~~
-📁 Analyzing: data/messy_pitch_deck.pdf
-🤖 AI extraction (groq): Found 1 startup(s)
-==================================================
-📊 VC DUE DILIGENCE REPORT
-==================================================
-Startups analyzed: 1
-Total Cash: €4,200,000
-🔥 Avg Burn Rate: €180,000/month
-⏳ Avg Runway: 23.3 months
-🚀 TOP GROWTH STARTUPS:
-   • QuantumBio: 35.0% MoM
-==================================================
 ~~~
 
 ## AI-Powered Extraction
@@ -148,6 +132,22 @@ python src/extract.py data/messy_pitch_deck.pdf --ai --provider openai
 python src/extract.py --help
 ~~~
 
+## Python Package Usage
+
+Install locally:
+~~~bash
+pip install .
+~~~
+
+Use in your code:
+~~~python
+from vc_diligence.extract import load_data, generate_report
+
+df = load_data("pitch.pdf", use_ai=True, provider="groq")
+report = generate_report(df)
+print(report)
+~~~
+
 ## Troubleshooting
 
 **litellm not found**: Activate virtual environment, run `pip install -r requirements.txt`
@@ -160,12 +160,17 @@ python src/extract.py --help
 
 ~~~
 vc-diligence-ai/
-├── src/              # Source code
-│   └── extract.py    # Main analysis module
-├── data/             # Sample data
-├── tests/            # Unit tests (coming soon)
-├── requirements.txt  # Python dependencies
-└── README.md         # This file
+├── vc_diligence/         # Python package
+│   ├── __init__.py
+│   └── extract.py        # Core implementation
+├── src/
+│   └── extract.py        # CLI wrapper
+├── data/                 # Sample data
+├── assets/               # Images
+├── setup.py              # pip install support
+├── requirements.txt
+├── LICENSE
+└── README.md
 ~~~
 
 ## Roadmap
@@ -173,5 +178,5 @@ vc-diligence-ai/
 - [x] CSV analysis & reporting
 - [x] PDF document parsing
 - [x] AI-powered data extraction
+- [x] API for integration with VC tools
 - [ ] Web dashboard interface
-- [ ] API for integration with VC tools
