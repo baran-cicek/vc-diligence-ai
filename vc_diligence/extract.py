@@ -9,6 +9,9 @@ import sys
 import os
 import argparse
 import json
+from datetime import datetime
+from tqdm import tqdm
+import numpy as np
 
 # Provider configuration: provider_name -> (model_id, env_var)
 PROVIDERS = {
@@ -19,6 +22,30 @@ PROVIDERS = {
     'mistral': ('mistral/mistral-small-latest', 'MISTRAL_API_KEY'),
     'deepseek': ('deepseek/deepseek-chat', 'DEEPSEEK_API_KEY'),
 }
+
+# Cost per 1K tokens (input, output) in USD
+PROVIDER_COSTS = {
+    'groq': (0, 0),  # Free tier
+    'anthropic': (0.003, 0.015),
+    'openai': (0.00015, 0.0006),
+    'google': (0.000075, 0.0003),
+    'mistral': (0.0002, 0.0006),
+    'deepseek': (0.00014, 0.00028),
+}
+
+MAX_PDF_PAGES = 50
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """JSON encoder that handles numpy types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
 
 
 def detect_provider() -> str | None:
@@ -44,6 +71,23 @@ def get_provider_error_message() -> str:
         msg += f"  {env_var:<20} - {name:<12} ({url})\n"
     msg += "\nExample:\n  export ANTHROPIC_API_KEY='your-key-here'\n"
     return msg
+
+
+def estimate_cost(text: str, provider: str) -> float:
+    """
+    Estimate API cost based on text length and provider.
+    Returns estimated cost in USD.
+    """
+    # Estimate tokens: ~4 characters per token
+    input_tokens = len(text) / 4
+    output_tokens = 500  # Assume 500 output tokens
+
+    input_cost, output_cost = PROVIDER_COSTS.get(provider, (0, 0))
+
+    # Cost per 1K tokens
+    total_cost = (input_tokens / 1000 * input_cost) + (output_tokens / 1000 * output_cost)
+    return total_cost
+
 
 def parse_pdf(filepath: str) -> pd.DataFrame:
     """
@@ -150,11 +194,20 @@ def parse_pdf_with_ai(filepath: str, provider: str) -> pd.DataFrame:
         print(f"{env_var} not set for provider '{provider}'")
         sys.exit(1)
 
-    # Extract text from PDF
+    # Extract text from PDF with page limit
     text_content = ""
     try:
         with pdfplumber.open(filepath) as pdf:
-            for page in pdf.pages:
+            total_pages = len(pdf.pages)
+
+            # Limit pages to control costs
+            if total_pages > MAX_PDF_PAGES:
+                print(f"⚠️  PDF has {total_pages} pages. Processing first {MAX_PDF_PAGES} to control costs.")
+                pages_to_process = pdf.pages[:MAX_PDF_PAGES]
+            else:
+                pages_to_process = pdf.pages
+
+            for page in pages_to_process:
                 page_text = page.extract_text()
                 if page_text:
                     text_content += page_text + "\n"
@@ -165,6 +218,15 @@ def parse_pdf_with_ai(filepath: str, provider: str) -> pd.DataFrame:
     if not text_content.strip():
         print("No text content found in PDF")
         sys.exit(1)
+
+    # Cost estimation and confirmation
+    estimated_cost = estimate_cost(text_content, provider)
+    if estimated_cost > 0.10 and provider != 'groq':
+        print(f"⚠️  Estimated cost: ${estimated_cost:.2f} ({provider})")
+        response = input("Continue? [y/N]: ").strip().lower()
+        if response != 'y':
+            print("Aborted by user.")
+            sys.exit(0)
 
     prompt = f"""Extract startup financial data from this document. Return ONLY valid JSON array.
 
@@ -392,13 +454,20 @@ Examples:
   python extract.py data/report.pdf             # Standard PDF parsing
   python extract.py data/report.pdf --ai        # AI extraction (auto-detect provider)
   python extract.py data/report.pdf --ai --provider openai
+  python extract.py data/*.pdf                  # Batch process multiple files
+  python extract.py file1.csv file2.pdf --output results.json
         """
     )
     parser.add_argument(
-        "file",
-        nargs="?",
-        default="data/startups.csv",
-        help="Input file (CSV or PDF). Default: data/startups.csv"
+        "files",
+        nargs="*",
+        default=["data/startups.csv"],
+        help="Input file(s) (CSV or PDF). Default: data/startups.csv"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        metavar="FILE",
+        help="Save combined results to JSON file"
     )
     parser.add_argument(
         "--ai",
@@ -413,6 +482,9 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    # Handle empty files list (use default)
+    files = args.files if args.files else ["data/startups.csv"]
 
     # Handle AI mode
     provider = None
@@ -430,12 +502,71 @@ Examples:
                 print(get_provider_error_message())
                 sys.exit(1)
 
-    print(f"📁 Analyzing: {args.file}")
-    df = load_data(args.file, use_ai=args.ai, provider=provider)
-    results = analyze_data(df)
+    # Single file processing (original behavior)
+    if len(files) == 1:
+        print(f"📁 Analyzing: {files[0]}")
+        df = load_data(files[0], use_ai=args.ai, provider=provider)
+        results = analyze_data(df)
+        print_report(results)
+        warnings = check_data_quality(df)
+        print_warnings(warnings)
+
+        # Save to JSON if --output specified
+        if args.output:
+            output_data = {
+                "processed_at": datetime.now().isoformat(),
+                "files_processed": 1,
+                "results": results,
+                "startups": df.to_dict('records')
+            }
+            with open(args.output, 'w') as f:
+                json.dump(output_data, f, indent=2, cls=NumpyEncoder)
+            print(f"📄 Results saved to: {args.output}")
+        return
+
+    # Batch processing for multiple files
+    print(f"📁 Batch processing {len(files)} file(s)...")
+    all_dfs = []
+    successful = 0
+    failed = 0
+
+    for filepath in tqdm(files, desc="Processing files"):
+        try:
+            df = load_data(filepath, use_ai=args.ai, provider=provider)
+            all_dfs.append(df)
+            successful += 1
+        except SystemExit:
+            # load_data calls sys.exit on error, catch and continue
+            failed += 1
+            tqdm.write(f"  ✗ Failed: {filepath}")
+        except Exception as e:
+            failed += 1
+            tqdm.write(f"  ✗ Failed: {filepath} ({e})")
+
+    print(f"\n✓ {successful}/{len(files)} files processed successfully")
+
+    if not all_dfs:
+        print("No files were processed successfully.")
+        sys.exit(1)
+
+    # Combine all DataFrames
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    results = analyze_data(combined_df)
     print_report(results)
-    warnings = check_data_quality(df)
+    warnings = check_data_quality(combined_df)
     print_warnings(warnings)
+
+    # Save to JSON if --output specified
+    if args.output:
+        output_data = {
+            "processed_at": datetime.now().isoformat(),
+            "files_processed": successful,
+            "results": results,
+            "startups": combined_df.to_dict('records')
+        }
+        with open(args.output, 'w') as f:
+            json.dump(output_data, f, indent=2, cls=NumpyEncoder)
+        print(f"📄 Results saved to: {args.output}")
 
 
 if __name__ == "__main__":

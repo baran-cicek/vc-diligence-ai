@@ -1,0 +1,87 @@
+{
+  "processed_at": "2026-01-04T12:25:26.309136",
+  "files_processed": 2,
+  "results": {
+    "startup_count": 10,
+    "avg_burn_rate": 132000.0,
+    "avg_runway": 31.343434343434335,
+    "runway_based_on": null,
+    "total_cash": 46600000.0,
+    "top_growers": [
+      {
+        "name": "GreenHydrogen",
+        "revenue_growth": 0.3
+      },
+      {
+        "name": "GreenHydrogen",
+        "revenue_growth": 0.3
+      },
+      {
+        "name": "BatteryX",
+        "revenue_growth": 0.22
+      }
+    ]
+  },
+  "startups": [
+    {
+      "name": "SolarTech",
+      "cash": 5000000.0,
+      "monthly_burn": 120000.0,
+      "revenue_growth": 0.15
+    },
+    {
+      "name": "GreenHydrogen",
+      "cash": 800000.0,
+      "monthly_burn": 40000.0,
+      "revenue_growth": 0.3
+    },
+    {
+      "name": "CarbonCapture",
+      "cash": 12000000.0,
+      "monthly_burn": 300000.0,
+      "revenue_growth": 0.05
+    },
+    {
+      "name": "BatteryX",
+      "cash": 2500000.0,
+      "monthly_burn": 90000.0,
+      "revenue_growth": 0.22
+    },
+    {
+      "name": "WindFlow",
+      "cash": 3000000.0,
+      "monthly_burn": 110000.0,
+      "revenue_growth": 0.12
+    },
+    {
+      "name": "SolarTech",
+      "cash": 5000000.0,
+      "monthly_burn": 120000.0,
+      "revenue_growth": 0.15
+    },
+    {
+      "name": "GreenHydrogen",
+      "cash": 800000.0,
+      "monthly_burn": 40000.0,
+      "revenue_growth": 0.3
+    },
+    {
+      "name": "CarbonCapture",
+      "cash": 12000000.0,
+      "monthly_burn": 300000.0,
+      "revenue_growth": 0.05
+    },
+    {
+      "name": "BatteryX",
+      "cash": 2500000.0,
+      "monthly_burn": 90000.0,
+      "revenue_growth": 0.22
+    },
+    {
+      "name": "WindFlow",
+      "cash": 3000000.0,
+      "monthly_burn": 110000.0,
+      "revenue_growth": 0.12
+    }
+  ]
+}
