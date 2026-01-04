@@ -3,11 +3,17 @@
 
 Automated financial KPI extraction for venture capital due diligence.
 
+Manual analysis of startup pitch decks wastes hours extracting basic metrics. Commercial tools cost €500+/month and lock your data in the cloud. This open-source alternative processes documents in seconds, runs locally, and costs nothing.
+
+![](assets/demo.gif)
+
 ## What it does
 
 - Analyzes CSV or PDF files with startup financial data
 - Calculates key metrics: Burn Rate, Runway, Growth Rankings
-- AI-powered data extraction with multi-provider support
+- AI-powered data extraction with multi-provider support (6 providers)
+- Batch processing for multiple files
+- Built-in cost estimation for AI providers
 - Data quality validation and warnings
 - Outputs clean, formatted reports
 - Built for VCs, angels, and startup analysts
@@ -56,6 +62,21 @@ python src/extract.py data/messy_pitch_deck.pdf --ai
 
 # AI extraction with specific provider
 python src/extract.py data/messy_pitch_deck.pdf --ai --provider openai
+~~~
+
+## Batch Processing
+
+Process multiple files at once:
+
+~~~bash
+# Process all PDFs in directory
+python src/extract.py data/*.pdf
+
+# Save combined results
+python src/extract.py data/*.pdf --output results.json
+
+# Batch AI extraction
+python src/extract.py data/*.pdf --ai --output analysis.json
 ~~~
 
 ## AI-Powered Extraction
@@ -165,6 +186,11 @@ vc-diligence-ai/
 │   └── extract.py        # Core implementation
 ├── src/
 │   └── extract.py        # CLI wrapper
+├── tests/                # Test suite (pytest)
+│   ├── test_parsing.py
+│   ├── test_numbers.py
+│   ├── test_quality.py
+│   └── fixtures/
 ├── data/                 # Sample data
 ├── assets/               # Images
 ├── setup.py              # pip install support
@@ -178,5 +204,8 @@ vc-diligence-ai/
 - [x] CSV analysis & reporting
 - [x] PDF document parsing
 - [x] AI-powered data extraction
-- [x] API for integration with VC tools
+- [x] Python package API
+- [x] Batch processing
+- [x] Cost protection & estimation
+- [x] Test coverage (15 tests)
 - [ ] Web dashboard interface

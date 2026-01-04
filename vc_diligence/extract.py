@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-VC Due Diligence MVP - CSV & PDF Analyzer with AI-powered extraction
+VC Diligence AI - Financial KPI Extraction
+
+Automated extraction of burn rate, runway, and growth metrics from startup
+pitch decks and financial documents. Supports CSV, PDF, and AI-powered extraction.
+
+Features:
+- Multi-provider AI support (6 providers)
+- Batch processing with progress tracking
+- Cost estimation for API calls
+- Data quality validation
 """
 import pandas as pd
 import pdfplumber
@@ -78,13 +87,13 @@ def estimate_cost(text: str, provider: str) -> float:
     Estimate API cost based on text length and provider.
     Returns estimated cost in USD.
     """
-    # Estimate tokens: ~4 characters per token
+    # Rough approximation: OpenAI/Anthropic use ~4 chars per token
     input_tokens = len(text) / 4
-    output_tokens = 500  # Assume 500 output tokens
+    output_tokens = 500  # Conservative estimate for JSON response
 
     input_cost, output_cost = PROVIDER_COSTS.get(provider, (0, 0))
 
-    # Cost per 1K tokens
+    # Calculate total: (tokens / 1000) * (cost per 1K tokens)
     total_cost = (input_tokens / 1000 * input_cost) + (output_tokens / 1000 * output_cost)
     return total_cost
 
@@ -200,7 +209,8 @@ def parse_pdf_with_ai(filepath: str, provider: str) -> pd.DataFrame:
         with pdfplumber.open(filepath) as pdf:
             total_pages = len(pdf.pages)
 
-            # Limit pages to control costs
+            # Cap pages at 50 to prevent expensive API calls on large documents
+            # Most pitch decks are <20 pages; financial data is typically early in doc
             if total_pages > MAX_PDF_PAGES:
                 print(f"⚠️  PDF has {total_pages} pages. Processing first {MAX_PDF_PAGES} to control costs.")
                 pages_to_process = pdf.pages[:MAX_PDF_PAGES]
@@ -530,13 +540,14 @@ Examples:
     successful = 0
     failed = 0
 
+    # Process each file independently; failures don't block subsequent files
     for filepath in tqdm(files, desc="Processing files"):
         try:
             df = load_data(filepath, use_ai=args.ai, provider=provider)
             all_dfs.append(df)
             successful += 1
         except SystemExit:
-            # load_data calls sys.exit on error, catch and continue
+            # load_data calls sys.exit on error, catch and continue batch
             failed += 1
             tqdm.write(f"  ✗ Failed: {filepath}")
         except Exception as e:

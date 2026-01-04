@@ -36,7 +36,18 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Data (optional - große Dateien nicht versionieren)
-data/*.pdf
-data/*.xlsx
-*.csv  # Außer deine Beispieldatei
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Output files from batch processing
+results.json
+ai_batch.json
+output*.json
+
+# Keep sample data files
+!data/startups.csv
+!data/startups.pdf
+!data/messy_pitch_deck.pdf
+!data/test_warnings.pdf
