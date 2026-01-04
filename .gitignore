@@ -51,3 +51,4 @@ output*.json
 !data/startups.pdf
 !data/messy_pitch_deck.pdf
 !data/test_warnings.pdf
+.claude/
