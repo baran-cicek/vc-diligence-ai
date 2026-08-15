@@ -1,3 +1,5 @@
+
+
 # VC Diligence AI
 ![](assets/vc-diligence-ai-ascii.png)
 
@@ -36,6 +38,8 @@ Total Cash: €4,200,000
 ~~~
 
 ## Installation
+
+Python 3.10 or later is required.
 
 From GitHub (recommended):
 ~~~bash
